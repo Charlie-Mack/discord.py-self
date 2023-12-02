@@ -1473,32 +1473,20 @@ async def _get_info(session: ClientSession) -> Tuple[Dict[str, Any], str]:
 
 async def _get_build_number(session: ClientSession) -> int:  # Thank you Discord-S.C.U.M
     """Fetches client build number"""
+    default_build_number = 9999
     try:
         login_page_request = await session.get('https://discord.com/login', timeout=7)
         login_page = await login_page_request.text()
-        build_url = 'https://discord.com/assets/' + re.compile(r'assets/+([a-z0-9]+)\.js').findall(login_page)[-2] + '.js'
-        build_request = await session.get(build_url, timeout=7)
-        build_file = await build_request.text()
-        # Check for 'buildNumber' format
-        build_index = build_file.find('buildNumber') + 24
-        build_number_str = build_file[build_index : build_index + 6]
-
-        if build_number_str.isnumeric():
-            return int(build_number_str)
-        else:
-            # Check for 'Build Number' format
-            build_index = build_file.find('Build Number') + 25
-            build_number_str = build_file[build_index : build_index + 6]
-
-            if build_number_str.isnumeric():
-                return int(build_number_str)
-            else:
-                # Handle the case where neither format contains a valid integer
-                _log.warning('Client build number is not a valid integer.')
-                return 9999  # Return a default value
+        for asset in re.compile(r'(\w+\.[a-z0-9]+)\.js').findall(login_page)[-1:]:
+            build_url = 'https://discord.com/assets/' + asset + '.js'
+            build_request = await session.get(build_url, timeout=7)
+            build_file = await build_request.text()
+            build_find = re.findall(r'Build Number:\D+"(\d+)"', build_file)
+            if build_find:
+                return int(build_find[0]) if build_find else default_build_number
     except asyncio.TimeoutError:
         _log.critical('Could not fetch client build number. Falling back to hardcoded value...')
-        return 9999
+        return default_build_number
 
 
 async def _get_user_agent(session: ClientSession) -> str:
